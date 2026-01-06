@@ -2,8 +2,8 @@ import pandas as pd
 import csv  # <-- import Python's built-in csv module
 
 # Input and output files
-INPUT_TXT = "../input/active_items.txt"
-OUTPUT_CSV = "../output/active_items.csv"
+INPUT_TXT = "input/active_items.txt"
+OUTPUT_CSV = "output/active_items.csv"
 
 # Read the TXT file (tab-separated)
 df = pd.read_csv(INPUT_TXT, sep="\t", dtype=str)

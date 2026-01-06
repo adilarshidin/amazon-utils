@@ -1,7 +1,7 @@
 import pandas as pd
 
-INPUT_CSV = "../input/asin_results.csv"   # change if needed
-OUTPUT_XLSX = "../output/asin_results.xlsx"
+INPUT_CSV = "output/translated_catalog.csv"   # change if needed
+OUTPUT_XLSX = "output/translated_catalog.xlsx"
 
 CHUNK_SIZE = 100_000  # rows per chunk (safe for large files)
 

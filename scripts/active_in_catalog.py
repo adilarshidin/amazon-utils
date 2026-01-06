@@ -1,11 +1,11 @@
 import pandas as pd
 
 # Input files
-ACTIVE_CSV = "../output/active_items.csv"
-CATALOG_CSV = "../output/asin_results.csv"
+ACTIVE_CSV = "output/active_items.csv"
+CATALOG_CSV = "output/asin_results.csv"
 
 # Output file for missing ASINs
-MISSING_CSV = "../output/missing_in_catalog.csv"
+MISSING_CSV = "output/missing_in_catalog.csv"
 
 # Read files
 active_df = pd.read_csv(ACTIVE_CSV, dtype=str)
