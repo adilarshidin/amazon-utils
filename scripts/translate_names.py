@@ -9,7 +9,7 @@ from mistralai import Mistral
 load_dotenv()
 
 INPUT_FILE = "output/asin_results.csv"
-OUTPUT_FILE = "output/translated_catalog.csv"
+OUTPUT_FILE = "output/translated_catalog_es.csv"
 CHECKPOINT_FILE = "input/translate_checkpoint.txt"
 TMP_OUTPUT_FILE = "output/.translated_catalog.tmp"
 
@@ -27,7 +27,7 @@ def translate_batch(names, mistral):
 You are given a list of product names from an Amazon catalog.
 
 Rules:
-- Translate each name to English.
+- Translate each name to Spanish.
 - Use the product context to choose the most accurate translation.
 - Return ONLY a JSON array of strings in the same order.
 - No markdown, no explanations.

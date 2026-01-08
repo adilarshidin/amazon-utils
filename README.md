@@ -3,6 +3,7 @@
 ## Features
 
 1. EAN to ASIN converter using [Rocketsource](https://app.rocketsource.io/).
+2. Product names translator using Mistral LLM API.
 
 ## Setup
 
