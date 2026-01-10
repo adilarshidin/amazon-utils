@@ -1,6 +1,7 @@
 uv.lock
 input/
 output/
+backups/
 
 # Python-generated files
 __pycache__/
