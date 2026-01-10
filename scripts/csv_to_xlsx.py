@@ -1,9 +1,9 @@
 import pandas as pd
 
-INPUT_CSV = "output/catalog_ready.csv"   # change if needed
-OUTPUT_XLSX = "output/catalog_ready.xlsx"
+INPUT_CSV = "output/konus_shopify.csv"
+OUTPUT_XLSX = "output/konus_shopify.xlsx"
 
-CHUNK_SIZE = 100_000  # rows per chunk (safe for large files)
+CHUNK_SIZE = 100_000
 
 
 def main():
