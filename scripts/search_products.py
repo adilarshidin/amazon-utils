@@ -9,6 +9,8 @@ output_catalog = "output/filtered_catalog.csv"
 checkpoint_file = "input/filter_checkpoint.csv"
 
 df = pd.read_csv(input_catalog)
+df["FECHA"] = pd.to_datetime(df["FECHA"])
+df = df.drop_duplicates(subset="ASIN", keep="last")
 
 def check_page(page: Page, asin: str) -> bool:
     page.set_extra_http_headers({"Accept-Language": "es-ES,es;q=0.9,en;q=0.8"})
@@ -25,6 +27,7 @@ def check_page(page: Page, asin: str) -> bool:
             check = False
 
         if not check:
+            time.sleep(random.randrange(3, 7))
             page.set_extra_http_headers({"Accept-Language": "en-US,en;q=0.9"})
             page.goto(f"https://www.amazon.com/dp/{asin}")
             ppd_div = page.locator("#ppd")
@@ -33,6 +36,8 @@ def check_page(page: Page, asin: str) -> bool:
                 if "currently unavailable" in inner:
                     check = False
                 elif "this item cannot be shipped to your selected delivery location. please choose a different delivery location" in inner:
+                    check = False
+                elif "no puede enviarse este producto al punto de entrega seleccionado. selecciona un punto de entrega diferente" in inner:
                     check = False
         return check
     return False
