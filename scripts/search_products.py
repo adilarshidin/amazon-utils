@@ -1,8 +1,8 @@
 import pandas as pd
 import random
-import time
+import asyncio
 import os
-from playwright.sync_api import sync_playwright, Page
+from playwright.async_api import async_playwright, Page
 
 input_catalog = "output/catalog_ready.csv"
 output_catalog = "output/filtered_catalog.csv"
@@ -12,13 +12,16 @@ df = pd.read_csv(input_catalog)
 df["FECHA"] = pd.to_datetime(df["FECHA"])
 df = df.drop_duplicates(subset="ASIN", keep="last")
 
-def check_page(page: Page, asin: str) -> bool:
-    page.set_extra_http_headers({"Accept-Language": "es-ES,es;q=0.9,en;q=0.8"})
-    page.goto(f"https://www.amazon.es/dp/{asin}")
+
+async def check_page(page: Page, asin: str) -> bool:
+    await page.set_extra_http_headers({"Accept-Language": "es-ES,es;q=0.9,en;q=0.8"})
+    await page.goto(f"https://www.amazon.es/dp/{asin}")
     ppd_div = page.locator("#ppd")
-    if ppd_div.count() > 0:
+
+    if await ppd_div.count() > 0:
         check = True
-        inner = ppd_div.inner_text().lower()
+        inner = (await ppd_div.inner_text()).lower()
+
         if "lo sentimos. la dirección web que has especificado no es una página activa de nuestro sitio." in inner:
             check = False
         elif "no disponible por el momento" in inner:
@@ -27,74 +30,84 @@ def check_page(page: Page, asin: str) -> bool:
             check = False
 
         if not check:
-            time.sleep(random.randrange(3, 7))
-            page.set_extra_http_headers({"Accept-Language": "en-US,en;q=0.9"})
-            page.goto(f"https://www.amazon.com/dp/{asin}")
+            await asyncio.sleep(random.randrange(3, 7))
+            await page.set_extra_http_headers({"Accept-Language": "en-US,en;q=0.9"})
+            await page.goto(f"https://www.amazon.com/dp/{asin}")
             ppd_div = page.locator("#ppd")
-            if ppd_div.count() > 0:
-                inner = ppd_div.inner_text().lower()
+
+            if await ppd_div.count() > 0:
+                inner = (await ppd_div.inner_text()).lower()
                 if "currently unavailable" in inner:
                     check = False
                 elif "this item cannot be shipped to your selected delivery location. please choose a different delivery location" in inner:
                     check = False
                 elif "no puede enviarse este producto al punto de entrega seleccionado. selecciona un punto de entrega diferente" in inner:
                     check = False
+
         return check
+
     return False
 
 
-with sync_playwright() as playwright:
-    browser = playwright.chromium.launch(headless=False)
-    context = browser.new_context(
-        locale="es-ES",
-        user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                   "AppleWebKit/537.36 (KHTML, like Gecko) "
-                   "Chrome/120.0.0.0 Safari/537.36"
-    )
+async def main():
+    async with async_playwright() as playwright:
+        browser = await playwright.chromium.launch(headless=False)
+        context = await browser.new_context(
+            locale="es-ES",
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                       "AppleWebKit/537.36 (KHTML, like Gecko) "
+                       "Chrome/120.0.0.0 Safari/537.36"
+        )
 
-    page_1 = context.new_page()
-    page_2 = context.new_page()
+        pages = [await context.new_page(), await context.new_page()]
+        semaphore = asyncio.Semaphore(2)
 
-    processed_asins = []
-    if os.path.exists(checkpoint_file):
-        processed_asins = pd.read_csv(checkpoint_file)["ASIN"].to_list()
+        processed_asins = []
+        if os.path.exists(checkpoint_file):
+            processed_asins = pd.read_csv(checkpoint_file)["ASIN"].to_list()
 
-    saved_asins = set()
-    if os.path.exists(output_catalog):
-        saved_asins = set(pd.read_csv(output_catalog)["ASIN"].to_list())
+        saved_asins = set()
+        if os.path.exists(output_catalog):
+            saved_asins = set(pd.read_csv(output_catalog)["ASIN"].to_list())
 
-    asins = df["ASIN"].tolist()
+        asins = df["ASIN"].tolist()
 
-    for i in range(0, len(asins), 2):
-        batch = asins[i:i + 2]
-        pages = [page_1, page_2]
+        async def process_asin(page: Page, asin: str, index: int):
+            async with semaphore:
+                if asin in processed_asins:
+                    return
 
-        for asin, page in zip(batch, pages):
-            if asin in processed_asins:
-                continue
+                print(f"Processing ASIN #{index}: {asin}")
+                await asyncio.sleep(random.randrange(3, 7))
 
-            print(f"Processing ASIN #{i + batch.index(asin)}: {asin}")
-            time.sleep(random.randrange(3, 7))
+                passed = await check_page(page, asin)
+                print(f"ASIN {'passed' if passed else 'did not pass'}")
 
-            passed = check_page(page, asin)
-            print(f"ASIN {'passed' if passed else 'did not pass'}")
-
-            pd.DataFrame([{"ASIN": asin}]).to_csv(
-                checkpoint_file,
-                mode="a",
-                header=not os.path.exists(checkpoint_file),
-                index=False
-            )
-            processed_asins.append(asin)
-
-            if passed and asin not in saved_asins:
-                row_df = df.loc[df["ASIN"] == asin]
-                row_df.to_csv(
-                    output_catalog,
+                pd.DataFrame([{"ASIN": asin}]).to_csv(
+                    checkpoint_file,
                     mode="a",
-                    header=not os.path.exists(output_catalog),
+                    header=not os.path.exists(checkpoint_file),
                     index=False
                 )
-                saved_asins.add(asin)
+                processed_asins.append(asin)
 
-    browser.close()
+                if passed and asin not in saved_asins:
+                    row_df = df.loc[df["ASIN"] == asin]
+                    row_df.to_csv(
+                        output_catalog,
+                        mode="a",
+                        header=not os.path.exists(output_catalog),
+                        index=False
+                    )
+                    saved_asins.add(asin)
+
+        tasks = []
+        for i, asin in enumerate(asins):
+            page = pages[i % 2]
+            tasks.append(process_asin(page, asin, i))
+
+        await asyncio.gather(*tasks)
+        await browser.close()
+
+
+asyncio.run(main())

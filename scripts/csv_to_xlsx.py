@@ -1,7 +1,7 @@
 import pandas as pd
 
-INPUT_CSV = "output/konus_shopify.csv"
-OUTPUT_XLSX = "output/konus_shopify.xlsx"
+INPUT_CSV = "input/konus_shopify_final.csv"
+OUTPUT_XLSX = "output/konus_shopify_final.xlsx"
 
 CHUNK_SIZE = 100_000
 
