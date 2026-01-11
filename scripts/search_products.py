@@ -44,15 +44,16 @@ def check_page(page: Page, asin: str) -> bool:
 
 
 with sync_playwright() as playwright:
-    chromium = playwright.chromium
-    browser = chromium.launch(headless=False)
+    browser = playwright.chromium.launch(headless=False)
     context = browser.new_context(
         locale="es-ES",
         user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                    "AppleWebKit/537.36 (KHTML, like Gecko) "
                    "Chrome/120.0.0.0 Safari/537.36"
     )
-    page = context.new_page()
+
+    page_1 = context.new_page()
+    page_2 = context.new_page()
 
     processed_asins = []
     if os.path.exists(checkpoint_file):
@@ -62,32 +63,38 @@ with sync_playwright() as playwright:
     if os.path.exists(output_catalog):
         saved_asins = set(pd.read_csv(output_catalog)["ASIN"].to_list())
 
-    for index, asin in df["ASIN"].items():
-        if asin in processed_asins:
-            continue
+    asins = df["ASIN"].tolist()
 
-        print(f"Processing ASIN #{index}: {asin}")
-        time.sleep(random.randrange(3, 7))
+    for i in range(0, len(asins), 2):
+        batch = asins[i:i + 2]
+        pages = [page_1, page_2]
 
-        passed = check_page(page, asin)
-        print(f"ASIN {'passed' if passed else 'did not pass'}")
+        for asin, page in zip(batch, pages):
+            if asin in processed_asins:
+                continue
 
-        pd.DataFrame([{"ASIN": asin}]).to_csv(
-            checkpoint_file,
-            mode="a",
-            header=not os.path.exists(checkpoint_file),
-            index=False
-        )
-        processed_asins.append(asin)
+            print(f"Processing ASIN #{i + batch.index(asin)}: {asin}")
+            time.sleep(random.randrange(3, 7))
 
-        if passed and asin not in saved_asins:
-            row_df = df.loc[df["ASIN"] == asin]
-            row_df.to_csv(
-                output_catalog,
+            passed = check_page(page, asin)
+            print(f"ASIN {'passed' if passed else 'did not pass'}")
+
+            pd.DataFrame([{"ASIN": asin}]).to_csv(
+                checkpoint_file,
                 mode="a",
-                header=not os.path.exists(output_catalog),
+                header=not os.path.exists(checkpoint_file),
                 index=False
             )
-            saved_asins.add(asin)
+            processed_asins.append(asin)
+
+            if passed and asin not in saved_asins:
+                row_df = df.loc[df["ASIN"] == asin]
+                row_df.to_csv(
+                    output_catalog,
+                    mode="a",
+                    header=not os.path.exists(output_catalog),
+                    index=False
+                )
+                saved_asins.add(asin)
 
     browser.close()
