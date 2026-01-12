@@ -13,38 +13,57 @@ df["FECHA"] = pd.to_datetime(df["FECHA"])
 df = df.drop_duplicates(subset="ASIN", keep="last")
 
 
-async def check_page(page: Page, asin: str) -> bool:
-    await page.set_extra_http_headers({"Accept-Language": "es-ES,es;q=0.9,en;q=0.8"})
-    await page.goto(f"https://www.amazon.es/dp/{asin}")
-    ppd_div = page.locator("#ppd")
+USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_4_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Safari/605.1.15",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+]
 
-    if await ppd_div.count() > 0:
-        check = True
-        inner = (await ppd_div.inner_text()).lower()
+LANG_HEADERS = [
+    {"Accept-Language": "es-ES,es;q=0.9,en;q=0.8"},
+    {"Accept-Language": "en-US,en;q=0.9"},
+    {"Accept-Language": "es-ES,es;q=0.9,en;q=0.8"},
+]
 
-        if "lo sentimos. la dirección web que has especificado no es una página activa de nuestro sitio." in inner:
-            check = False
-        elif "no disponible por el momento" in inner:
-            check = False
-        elif "no disponible" in inner:
-            check = False
 
-        if not check:
-            await asyncio.sleep(random.randrange(3, 7))
-            await page.set_extra_http_headers({"Accept-Language": "en-US,en;q=0.9"})
-            await page.goto(f"https://www.amazon.com/dp/{asin}")
+async def check_page(page: Page, asin: str, retries: int = 3) -> bool:
+    for attempt in range(retries):
+        try:
+            await page.goto(f"https://www.amazon.es/dp/{asin}")
             ppd_div = page.locator("#ppd")
 
             if await ppd_div.count() > 0:
+                check = True
                 inner = (await ppd_div.inner_text()).lower()
-                if "currently unavailable" in inner:
+
+                if "lo sentimos. la dirección web que has especificado no es una página activa de nuestro sitio." in inner:
                     check = False
-                elif "this item cannot be shipped to your selected delivery location. please choose a different delivery location" in inner:
+                elif "no disponible por el momento" in inner:
                     check = False
-                elif "no puede enviarse este producto al punto de entrega seleccionado. selecciona un punto de entrega diferente" in inner:
+                elif "no disponible" in inner:
                     check = False
 
-        return check
+                if not check:
+                    await asyncio.sleep(random.randrange(3, 7))
+                    await page.goto(f"https://www.amazon.com/dp/{asin}")
+                    ppd_div = page.locator("#ppd")
+
+                    if await ppd_div.count() > 0:
+                        inner = (await ppd_div.inner_text()).lower()
+                        if "currently unavailable" in inner:
+                            check = False
+                        elif "this item cannot be shipped to your selected delivery location. please choose a different delivery location" in inner:
+                            check = False
+                        elif "no puede enviarse este producto al punto de entrega seleccionado. selecciona un punto de entrega diferente" in inner:
+                            check = False
+
+                return check
+
+            return False
+
+        except Exception as e:
+            print(f"Retry {attempt + 1}/{retries} for ASIN {asin} due to error: {e}")
+            await asyncio.sleep(random.randrange(2, 5))
 
     return False
 
@@ -52,15 +71,19 @@ async def check_page(page: Page, asin: str) -> bool:
 async def main():
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(headless=False)
-        context = await browser.new_context(
-            locale="es-ES",
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                       "AppleWebKit/537.36 (KHTML, like Gecko) "
-                       "Chrome/120.0.0.0 Safari/537.36"
-        )
+        context = await browser.new_context()
 
-        pages = [await context.new_page(), await context.new_page()]
-        semaphore = asyncio.Semaphore(2)
+        # 🔹 CREATE 3 PAGES WITH UNIQUE HEADERS
+        pages = []
+        for i in range(3):
+            page = await context.new_page()
+            await page.set_extra_http_headers({
+                **LANG_HEADERS[i],
+                "User-Agent": USER_AGENTS[i]
+            })
+            pages.append(page)
+
+        semaphore = asyncio.Semaphore(3)
 
         processed_asins = []
         if os.path.exists(checkpoint_file):
@@ -103,7 +126,7 @@ async def main():
 
         tasks = []
         for i, asin in enumerate(asins):
-            page = pages[i % 2]
+            page = pages[i % 3]
             tasks.append(process_asin(page, asin, i))
 
         await asyncio.gather(*tasks)
