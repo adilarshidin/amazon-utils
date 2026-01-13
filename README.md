@@ -6,7 +6,7 @@
 2. Product names translator using Mistral LLM API.
 3. Scraper for amazon inventory prices actualizer.
 
-    Amazon inventory download shows incorrect prices for some items. This scraper
+    Amazon inventory download shows incorrect prices for some items. This scraper takes the actual price of the product from the product's page on Amazon.
 
 ## Setup
 
@@ -21,6 +21,10 @@
     1) EAN-ASIN conversion. Check US and ES markets.
 
     2) Product names translation.
+
+    3) Deduplicate the products with the same ASIN/EAN codes leaving only the most recent ones.
+
+    4) Scrape Amazon and remove the products that are not available or can not be imported.
 
 2. Amazon listing prices update:
 
