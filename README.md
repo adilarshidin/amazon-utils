@@ -4,6 +4,9 @@
 
 1. EAN to ASIN converter using [Rocketsource](https://app.rocketsource.io/).
 2. Product names translator using Mistral LLM API.
+3. Scraper for amazon inventory prices actualizer.
+
+    Amazon inventory download shows incorrect prices for some items. This scraper
 
 ## Setup
 
