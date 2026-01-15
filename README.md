@@ -2,11 +2,7 @@
 
 ## Features
 
-1. EAN to ASIN converter using [Rocketsource](https://app.rocketsource.io/).
-2. Product names translator using Mistral LLM API.
-3. Scraper for amazon inventory prices actualizer.
-
-    Amazon inventory download shows incorrect prices for some items. This scraper takes the actual price of the product from the product's page on Amazon.
+1. Product names translator using Mistral LLM API.
 
 ## Setup
 
@@ -28,11 +24,30 @@
 
 2. Amazon listing prices update:
 
-    1) Convert txt to csv.
+    1) Download price & quantity template. Or use Flat.File.PriceInventory.es.xlsx from templates directory.
 
-    2) Update using another csv.
+    2) Fill sku column (EAN or other seller side code).
+
+    3) Fill price and quantity (omit any if not needed to change).
+
+    3) Upload via "Add product" in Inventory Management section.
+
+3. Amazon listing delete guide.
+
+    1) In searchbar search "inventory loader template". Or use Flat.File.InventoryLoader.us.xlsx from templates directory and skip to step 5.
+
+    2) Switch country to US.
+
+    3) Click on "Use the inventory loader" article.
+
+    4) Download template.
+
+    5) Fill sku column (EAN or other seller side code).
+
+    6) Fill add-delete column (d for delete from shop but keep in market, x to delete entirely)
 
 ## Tools needed
 
 1. Scraper of item prices sold by other shops to find the reasonable margin.
 2. Seller Assistant like info for finding best selling items and other insights.
+3. EAN scraper to find on which Amazon market the item exists and is available.
