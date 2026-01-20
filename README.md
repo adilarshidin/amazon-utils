@@ -46,8 +46,14 @@
 
     6) Fill add-delete column (d for delete from shop but keep in market, x to delete entirely)
 
-## Tools needed
+### Tools needed
 
 1. Scraper of item prices sold by other shops to find the reasonable margin.
 2. Seller Assistant like info for finding best selling items and other insights.
 3. EAN scraper to find on which Amazon market the item exists and is available.
+
+### Tasks
+
+1. Form full catalog uniting all products from sellerboard with existing large catalog.
+Keep only the latest duplicate. Check that the format of ALL columns is the same.
+Money columns are formatted correctly, percentage columns too.
