@@ -8,10 +8,10 @@ from pathlib import Path
 from playwright.async_api import async_playwright, Page
 
 # =========================
-# FILES
+# FILES & PATHS
 # =========================
-INPUT_CSV = "output/all_listings.csv"
-OUTPUT_CSV = "output/all_listings_with_images.csv"
+INPUT_CSV = "output/all_listings_with_images.csv"
+OUTPUT_CSV = "output/all_listings_with_images_complete.csv"
 CHECKPOINT_CSV = "checkpoints/image_checkpoint.csv"
 IMAGE_DIR = "downloaded_images"
 
@@ -60,18 +60,48 @@ async def download_image(session: aiohttp.ClientSession, url: str, path: str):
             with open(path, "wb") as f:
                 f.write(await resp.read())
 
-async def extract_landing_images(page: Page) -> list[str]:
-    img = page.locator('img[data-a-image-name="landingImage"]')
-    await img.wait_for(timeout=IMAGE_WAIT_TIMEOUT)
+async def extract_all_images(page: Page) -> list[str]:
+    """Extract main + all available thumbnail images, high-res if possible."""
+    urls = []
 
-    dynamic = await img.get_attribute("data-a-dynamic-image")
-    if not dynamic:
-        src = await img.get_attribute("src")
-        return [src] if src else []
+    # --- 1. main image ---
+    try:
+        img = page.locator('img[data-a-image-name="landingImage"]')
+        await img.wait_for(timeout=IMAGE_WAIT_TIMEOUT)
+        dynamic = await img.get_attribute("data-a-dynamic-image")
+        if dynamic:
+            main_urls = re.findall(r'"(https://m\.media-amazon\.com[^"]+)"', dynamic)
+            main_urls = {re.sub(r"\._[^.]+_", ".", u) for u in main_urls}
+            urls.extend(sorted(main_urls))
+        else:
+            src = await img.get_attribute("src")
+            if src:
+                urls.append(src)
+    except:
+        pass
 
-    urls = re.findall(r'"(https://m\.media-amazon\.com[^"]+)"', dynamic)
-    urls = {re.sub(r"\._[^.]+_", ".", u) for u in urls}
-    return sorted(urls)
+    # --- 2. all thumbnails (filter out small previews) ---
+    try:
+        thumbnail_lis = page.locator('ul.a-unordered-list li.imageThumbnail, ul.a-unordered-list li.item')
+        count = await thumbnail_lis.count()
+        for i in range(count):
+            li = thumbnail_lis.nth(i)
+            classes = (await li.get_attribute("class")) or ""
+            if "a-hidden" in classes or "template" in classes:
+                continue
+
+            thumb_img = li.locator("img")
+            thumb_src = await thumb_img.get_attribute("data-old-hires")  # high-res if exists
+            if not thumb_src:
+                thumb_src = await thumb_img.get_attribute("src")
+
+            # FILTER OUT SMALL THUMBNAILS
+            if thumb_src and not re.search(r"(_US40_|_SX40_|_SS40_)", thumb_src) and thumb_src not in urls:
+                urls.append(thumb_src)
+    except:
+        pass
+
+    return urls
 
 # =========================
 # MAIN
@@ -109,7 +139,7 @@ async def main():
                         wait_until="domcontentloaded"
                     )
 
-                    image_urls = await extract_landing_images(page)
+                    image_urls = await extract_all_images(page)
 
                     for i, url in enumerate(image_urls, start=1):
                         filename = f"{asin}_image{i}.jpg"
@@ -149,9 +179,6 @@ async def main():
         ]
 
         await asyncio.gather(*tasks)
-
-        # BROWSER INTENTIONALLY LEFT OPEN
-        print("Finished processing all ASINs. Browser left open.")
 
 # =========================
 # RUN
