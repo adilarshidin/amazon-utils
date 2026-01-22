@@ -96,7 +96,7 @@ async def extract_all_images(page: Page) -> list[str]:
                 thumb_src = await thumb_img.get_attribute("src")
 
             # FILTER OUT SMALL THUMBNAILS AND VIDEOS
-            if thumb_src and not re.search(r"(_US40_|_SX40_|_SS40_|_SR38,50_|_US100_|dp-play-icon-overlay|_SX38_SY50_CR|play-button-mb-image-grid-small_)", thumb_src) and thumb_src not in urls:
+            if thumb_src and not re.search(r"(_US40_|_SX40_|_SS40_|_SR38,50_|_US100_|dp-play-icon-overlay|_SX38_SY50_CR|play-button-mb-image-grid-small_|mb-play-button-overlay-thumb)", thumb_src) and thumb_src not in urls:
                 urls.append(thumb_src)
     except:
         pass
