@@ -3,6 +3,7 @@ import glob
 import os
 import json
 import re
+import time
 from dotenv import load_dotenv
 from mistralai import Mistral
 from openpyxl import load_workbook
@@ -22,7 +23,26 @@ def clean_text(text: str) -> str:
     text = re.sub(r"^```.*?\n|\n```$", "", text, flags=re.DOTALL)
     return text.strip()
 
-def classify_subcategories_batch(items, category_tree, mistral):
+def clean_subcategory(subpath: str) -> str:
+    """
+    Cleans the LLM output subcategory string:
+    - strips whitespace
+    - removes surrounding quotes (single or double)
+    """
+    if not subpath:
+        return ""
+    subpath = subpath.strip()
+    # Remove surrounding quotes if present
+    if (subpath.startswith('"') and subpath.endswith('"')) or \
+       (subpath.startswith("'") and subpath.endswith("'")):
+        subpath = subpath[1:-1].strip()
+    return subpath
+
+def classify_subcategory(item, category_tree, mistral):
+    """
+    Classify a single product into a Worten subcategory.
+    Returns the subcategory path as a string.
+    """
     prompt = f"""
 You are classifying products for Worten marketplace.
 
@@ -34,14 +54,11 @@ Do NOT explain.
 Category tree:
 {json.dumps(category_tree, ensure_ascii=False, indent=2)}
 
-Products:
-{json.dumps(items, ensure_ascii=False, indent=2)}
+Product:
+{json.dumps(item, ensure_ascii=False, indent=2)}
 
 Output example:
-[
-  "Taller/Garaje Almacenaje y Accesorios/Correas y fundas para herramientas",
-  "Accesorios/Gafas de Sol"
-]
+"Taller/Garaje Almacenaje y Accesorios/Correas y fundas para herramientas"
 """
     res = mistral.chat.complete(
         model=LLM_MODEL,
@@ -49,7 +66,7 @@ Output example:
         stream=False,
     )
 
-    return json.loads(clean_text(res.choices[0].message.content))
+    return clean_text(res.choices[0].message.content)
 
 # =========================
 # PATHS
@@ -291,64 +308,39 @@ for xlsx_path in xlsx_files:
         row += 1
 
     # =========================
-    # LLM SUBCATEGORY ENRICHMENT
+    # LLM SUBCATEGORY ENRICHMENT (row-by-row)
     # =========================
     if filename in PRODUCT_CATEGORIES:
         category_tree = PRODUCT_CATEGORIES[filename]
 
-        rows_for_llm = []
-        row_refs = []
+        with Mistral(api_key=os.getenv("MISTRAL_API_TOKEN", "")) as mistral:
+            for r in range(row_start, row):
+                product_id = ws.cell(r, col_index[ANCHOR_COLUMN]).value
+                if not product_id:
+                    continue
 
-        for r in range(row_start, row):
-            product_id = ws.cell(r, col_index[ANCHOR_COLUMN]).value
-            if not product_id:
-                continue
+                name = ws.cell(r, col_index["product_name_es_ES"]).value or ""
+                desc = ws.cell(r, col_index["product_description_es_ES"]).value or ""
 
-            name = ws.cell(r, col_index["product_name_es_ES"]).value or ""
-            desc = ws.cell(r, col_index["product_description_es_ES"]).value or ""
+                item = {"product_id": product_id, "name": name, "description": desc}
 
-            rows_for_llm.append({
-                "product_id": product_id,
-                "name": name,
-                "description": desc
-            })
-            row_refs.append(r)
+                try:
+                    subpath = classify_subcategory(item, category_tree, mistral)
+                except Exception as e:
+                    print(f"❌ LLM failure for product_id {product_id} in {filename}: {e}")
+                    continue
 
-        if rows_for_llm:
-            with Mistral(api_key=os.getenv("MISTRAL_API_TOKEN", "")) as mistral:
-                for i in range(0, len(rows_for_llm), LLM_BATCH_SIZE):
-                    batch_items = rows_for_llm[i:i + LLM_BATCH_SIZE]
-                    batch_rows = row_refs[i:i + LLM_BATCH_SIZE]
-
-                    try:
-                        subpaths = classify_subcategories_batch(
-                            batch_items,
-                            category_tree,
-                            mistral
-                        )
-                    except Exception as e:
-                        print(f"❌ LLM failure in {filename}: {e}")
-                        continue
-
-                    for excel_row, subpath in zip(batch_rows, subpaths):
-                        if not subpath or not isinstance(subpath, str):
-                            continue
-                        subpath = subpath.strip()
-
-                        base_cat = ws.cell(
-                            excel_row, col_index["mp_category"]
-                        ).value or ""
-
-                        ws.cell(
-                            excel_row,
-                            col_index["mp_category"],
-                            value=f"{base_cat}/{subpath}"
-                        )
-
-                    print(
-                        f"🤖 Subcategories classified "
-                        f"{i + 1}–{min(i + LLM_BATCH_SIZE, len(rows_for_llm))}"
+                if subpath:
+                    subpath = clean_subcategory(subpath)
+                    base_cat = ws.cell(r, col_index["mp_category"]).value or ""
+                    ws.cell(
+                        r,
+                        col_index["mp_category"],
+                        value=f"{base_cat}/{subpath}" if base_cat else subpath
                     )
+
+                    print(f"🤖 Classified subcategory for product_id {product_id}: {subpath}")
+                    time.sleep(1)
     else:
         print(f"⚠️ No category tree for {filename}, skipping LLM enrichment")
 
