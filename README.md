@@ -24,13 +24,13 @@
 
 2. Amazon listing prices update:
 
-    1) Download price & quantity template. Or use Flat.File.PriceInventory.es.xlsx from templates directory.
+    1) Download price & quantity template. Or use *Flat.File.PriceInventory.es.xlsx* from templates directory.
 
-    2) Fill sku column (EAN or other seller side code).
+    2) Fill **sku** column (EAN or other seller side code).
 
-    3) Fill price and quantity (omit any if not needed to change).
+    3) Fill **price** and **quantity** columns.
 
-    3) Upload via "Add product" in Inventory Management section.
+    3) Upload via **Add product** and choose **Spreadsheet** tab in Inventory Management section.
 
 3. Amazon listing delete guide.
 
